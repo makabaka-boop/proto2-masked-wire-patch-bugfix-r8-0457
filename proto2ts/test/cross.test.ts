@@ -25,6 +25,7 @@ import {
   encodeAddressBook,
   encodeChain,
   encodePerson,
+  patchPerson,
 } from "../demo/addressbook.pb.js";
 import type { AddressBook, Chain, Person } from "../demo/addressbook.pb.js";
 
@@ -192,8 +193,58 @@ test("cross: our encodings decode identically under protoc", { skip }, () => {
   }
 });
 
-// ----- 3. unknown fields visible to protoc ------------------------------------
+// ----- 2b. masked patch -> protoc ----------------------------------------------
 
+test(
+  "cross: a masked-patch result decodes under protoc with the expected content",
+  { skip },
+  () => {
+    const base = encodePerson({
+      name: "Alice",
+      id: 1,
+      email: "alice@example.com",
+      address: { street: "1 Main St", city: "Springfield", zip: "01101" },
+      deltas: [1, -2],
+      lucky_numbers: [7, 13],
+      active: true,
+      score: 5,
+    });
+    // Partial patch (no required name/id): replace lucky_numbers, set an
+    // explicit active=false, move only address.zip, and clear email.
+    const w = new rt.Writer();
+    w.tag(6, 0);
+    w.varint(9n); // lucky_numbers = [9]
+    w.tag(7, 0);
+    w.varint(0n); // active = false, explicit
+    const zip = new TextEncoder().encode("99999");
+    const addr = new rt.Writer();
+    addr.tag(3, 2);
+    addr.varint(BigInt(zip.length));
+    addr.bytes(zip);
+    const ab = addr.finish();
+    w.tag(4, 2);
+    w.varint(BigInt(ab.length));
+    w.bytes(ab); // address = { zip: "99999" }
+    const out = patchPerson(base, w.finish(), [
+      "lucky_numbers",
+      "active",
+      "address.zip",
+      "email",
+    ]);
+
+    const text = protocDecode("Person", out);
+    assert.match(text, /name: "Alice"/);
+    assert.match(text, /lucky_numbers: 9/);
+    assert.doesNotMatch(text, /lucky_numbers: 7/); // replaced, not appended
+    assert.match(text, /active: false/); // explicit default present on the wire
+    assert.doesNotMatch(text, /email/); // selected + absent -> cleared
+    assert.match(text, /zip: "99999"/);
+    assert.match(text, /street: "1 Main St"/); // unselected sibling kept
+    assert.match(text, /score: 5/); // unselected field kept
+  },
+);
+
+// ----- 3. unknown fields visible to protoc ------------------------------------
 test(
   "cross: unknown fields we preserve are visible to protoc --decode",
   { skip },

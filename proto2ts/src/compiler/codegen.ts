@@ -71,9 +71,12 @@ function emitMessage(out: string[], m: MessageDecl): void {
   out.push(`}`);
   out.push(``);
   out.push(
-    `export function patch${m.name}(base: Uint8Array, patch: Uint8Array, paths: readonly string[]): Uint8Array {`,
+    `/** Whitelist-patch a complete ${m.name} wire message with a partial one; see rt.applyMaskedPatch. */`,
   );
-  out.push(`  return rt.applyMaskedPatch(${m.name}$desc, base, patch, paths);`);
+  out.push(
+    `export function patch${m.name}(baseWire: Uint8Array, patchWire: Uint8Array, paths: readonly string[]): Uint8Array {`,
+  );
+  out.push(`  return rt.applyMaskedPatch(${m.name}$desc, baseWire, patchWire, paths);`);
   out.push(`}`);
   out.push(``);
   out.push(`export function decode${m.name}(buf: Uint8Array): ${m.name} {`);

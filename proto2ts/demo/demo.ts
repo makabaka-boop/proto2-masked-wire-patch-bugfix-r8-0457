@@ -15,6 +15,7 @@ import {
   encodeAddressBook,
   encodeChain,
   encodePerson,
+  patchPerson,
 } from "./addressbook.pb.js";
 import type { AddressBook, Chain, Person } from "./addressbook.pb.js";
 
@@ -406,6 +407,104 @@ section("7. Malformed input fails explicitly");
     );
     console.log(`    depth 9 decode: ${(e as Error).message}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+section("8. Masked patch: whitelist replace/clear over the wire");
+{
+  // Base: a complete Person, plus an unknown field (#30) that must survive.
+  const baseKnown = encodePerson({
+    name: "G",
+    id: 7,
+    email: "g@example.com",
+    address: { street: "1 Main St", city: "Springfield", zip: "01101" },
+    deltas: [1, -2],
+    lucky_numbers: [5],
+    active: true,
+    score: 9,
+  });
+  const unk = new rt.Writer();
+  unk.tag(30, 0);
+  unk.varint(150n);
+  const baseWire = new Uint8Array([...baseKnown, ...unk.finish()]);
+
+  // Patch: partial (no required name/id), an explicit active=false, a packed
+  // replacement for deltas, only zip inside address, and an unknown field
+  // (#40) that must NOT leak into the result.
+  const pw = new rt.Writer();
+  pw.tag(7, 0);
+  pw.varint(0n); // active = false, explicit
+  const packed = new rt.Writer();
+  for (const v of [9, -9]) packed.varint(BigInt(rt.zigzagEncode32(v)));
+  const pb = packed.finish();
+  pw.tag(5, 2);
+  pw.varint(BigInt(pb.length));
+  pw.bytes(pb); // deltas = [9, -9]
+  const zip = new TextEncoder().encode("99999");
+  const addr = new rt.Writer();
+  addr.tag(3, 2);
+  addr.varint(BigInt(zip.length));
+  addr.bytes(zip); // address.zip only (required street/city absent: ok in a patch)
+  const ab = addr.finish();
+  pw.tag(4, 2);
+  pw.varint(BigInt(ab.length));
+  pw.bytes(ab);
+  pw.tag(40, 0);
+  pw.varint(1n); // unknown to the schema
+  const patchWire = pw.finish();
+
+  const out = decodePerson(
+    patchPerson(baseWire, patchWire, ["active", "deltas", "address.zip", "email"]),
+  );
+  console.log(
+    `    patched: active=${String(out.active)} deltas=${JSON.stringify(out.deltas)} ` +
+      `zip=${out.address?.zip} email=${String(out.email)}`,
+  );
+  check(out.active === false && "active" in out, "explicit default keeps presence");
+  check(
+    JSON.stringify(out.deltas) === "[9,-9]",
+    "selected repeated field is replaced, not appended",
+  );
+  check(
+    out.address?.zip === "99999" &&
+      out.address?.street === "1 Main St" &&
+      out.address?.city === "Springfield",
+    "sub-path touches only its field; siblings kept",
+  );
+  check(out.email === undefined, "selected absent singular is cleared");
+  check(
+    out.score === 9 && JSON.stringify(out.lucky_numbers) === "[5]",
+    "unselected fields survive",
+  );
+  check(
+    rt.getUnknownFields(out).map((u) => u.no).join(",") === "30",
+    "base unknowns kept, patch unknowns not introduced",
+  );
+
+  // Bad masks and incomplete candidates fail the whole operation; the
+  // caller's input bytes are never touched.
+  const before = [...baseWire];
+  try {
+    patchPerson(baseWire, patchWire, ["address", "address.zip"]);
+    check(false, "overlapping parent/child paths must fail");
+  } catch (e) {
+    check(e instanceof rt.PatchError, "overlap rejected with PatchError");
+    console.log(`    overlap rejected: ${(e as Error).message}`);
+  }
+  try {
+    patchPerson(baseWire, new Uint8Array([]), ["name"]);
+    check(false, "clearing a required field must fail");
+  } catch (e) {
+    check(
+      e instanceof rt.DecodeError && /Person\.name/.test((e as Error).message),
+      "incomplete candidate rejected",
+    );
+    console.log(`    incomplete candidate: ${(e as Error).message}`);
+  }
+  check(
+    [...baseWire].join(",") === before.join(","),
+    "caller input bytes unchanged after failures",
+  );
 }
 
 // ---------------------------------------------------------------------------

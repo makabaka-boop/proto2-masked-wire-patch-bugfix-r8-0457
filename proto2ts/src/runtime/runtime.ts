@@ -638,4 +638,4 @@ export function assertRequiredMessage(
   validateRequired(desc, msg, desc.name);
 }
 
-export { applyMaskedPatch } from "./masked-patch.js";
+export { applyMaskedPatch, PatchError, MAX_PATCH_PATHS } from "./masked-patch.js";
