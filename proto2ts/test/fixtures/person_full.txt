@@ -1,0 +1,12 @@
+name: "Alice"
+id: -123
+email: "alice@example.com"
+address { street: "1 Main St" city: "Springfield" zip: "01101" }
+deltas: -1
+deltas: 0
+deltas: 300
+lucky_numbers: 7
+lucky_numbers: -8
+active: false
+avatar: "\000\001\377"
+score: 4000000000

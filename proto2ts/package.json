@@ -1,0 +1,20 @@
+{
+  "name": "proto2ts",
+  "version": "0.1.0",
+  "description": "proto2 subset compiler + shared runtime: .proto text -> TypeScript encode/decode modules",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "gen:demo": "tsx src/cli.ts demo/addressbook.proto -o demo/addressbook.pb.ts --runtime ../src/runtime/runtime.js",
+    "demo": "tsx demo/demo.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "fixtures": "node test/gen-fixtures.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "grpc-tools": "^1.13.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

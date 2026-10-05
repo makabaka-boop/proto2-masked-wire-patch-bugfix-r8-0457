@@ -1,0 +1,36 @@
+// Demo schema for proto2ts: an address book.
+syntax = "proto2";
+
+package demo;
+
+// A postal address.
+message Address {
+  required string street = 1;
+  required string city = 2;
+  optional string zip = 3;
+}
+
+// A person in the address book.
+message Person {
+  required string name = 1;   // full name
+  required int32 id = 2;      // may be negative, to exercise 10-byte varints
+  optional string email = 3;
+  optional Address address = 4;
+  repeated sint32 deltas = 5 [packed = true]; // zigzag, packed on the wire
+  repeated int32 lucky_numbers = 6;           // unpacked on the wire
+  optional bool active = 7;                   // presence demo: explicit false
+  optional bytes avatar = 8;
+  optional uint32 score = 9;
+}
+
+// The whole address book.
+message AddressBook {
+  repeated Person people = 1;
+  optional Person owner = 2;
+}
+
+// A linked list node; recursion exercises the depth limit.
+message Chain {
+  required int32 value = 1;
+  optional Chain next = 2;
+}

@@ -1,0 +1,3 @@
+people { name: "Alice" id: 1 deltas: 5 lucky_numbers: 7 }
+people { name: "Bob" id: -2 address { street: "2 Oak Ave" city: "Shelbyville" } }
+owner { name: "Carol" id: 3 active: true }
