@@ -25,6 +25,10 @@ export function encodeAddress(msg: Address): Uint8Array {
   return rt.encodeMessage(Address$desc, msg);
 }
 
+export function patchAddress(base: Uint8Array, patch: Uint8Array, paths: readonly string[]): Uint8Array {
+  return rt.applyMaskedPatch(Address$desc, base, patch, paths);
+}
+
 export function decodeAddress(buf: Uint8Array): Address {
   return rt.decodeMessage(Address$desc, buf);
 }
@@ -65,13 +69,7 @@ export const Person$desc: rt.MessageDesc = {
     { no: 1, name: "name", label: "required", type: "string" },
     { no: 2, name: "id", label: "required", type: "int32" },
     { no: 3, name: "email", label: "optional", type: "string" },
-    {
-      no: 4,
-      name: "address",
-      label: "optional",
-      type: "message",
-      msg: () => Address$desc,
-    },
+    { no: 4, name: "address", label: "optional", type: "message", msg: () => Address$desc },
     { no: 5, name: "deltas", label: "repeated", type: "sint32", packed: true },
     { no: 6, name: "lucky_numbers", label: "repeated", type: "int32" },
     { no: 7, name: "active", label: "optional", type: "bool" },
@@ -82,6 +80,10 @@ export const Person$desc: rt.MessageDesc = {
 
 export function encodePerson(msg: Person): Uint8Array {
   return rt.encodeMessage(Person$desc, msg);
+}
+
+export function patchPerson(base: Uint8Array, patch: Uint8Array, paths: readonly string[]): Uint8Array {
+  return rt.applyMaskedPatch(Person$desc, base, patch, paths);
 }
 
 export function decodePerson(buf: Uint8Array): Person {
@@ -99,25 +101,17 @@ export interface AddressBook {
 export const AddressBook$desc: rt.MessageDesc = {
   name: "AddressBook",
   fields: [
-    {
-      no: 1,
-      name: "people",
-      label: "repeated",
-      type: "message",
-      msg: () => Person$desc,
-    },
-    {
-      no: 2,
-      name: "owner",
-      label: "optional",
-      type: "message",
-      msg: () => Person$desc,
-    },
+    { no: 1, name: "people", label: "repeated", type: "message", msg: () => Person$desc },
+    { no: 2, name: "owner", label: "optional", type: "message", msg: () => Person$desc },
   ],
 };
 
 export function encodeAddressBook(msg: AddressBook): Uint8Array {
   return rt.encodeMessage(AddressBook$desc, msg);
+}
+
+export function patchAddressBook(base: Uint8Array, patch: Uint8Array, paths: readonly string[]): Uint8Array {
+  return rt.applyMaskedPatch(AddressBook$desc, base, patch, paths);
 }
 
 export function decodeAddressBook(buf: Uint8Array): AddressBook {
@@ -136,18 +130,16 @@ export const Chain$desc: rt.MessageDesc = {
   name: "Chain",
   fields: [
     { no: 1, name: "value", label: "required", type: "int32" },
-    {
-      no: 2,
-      name: "next",
-      label: "optional",
-      type: "message",
-      msg: () => Chain$desc,
-    },
+    { no: 2, name: "next", label: "optional", type: "message", msg: () => Chain$desc },
   ],
 };
 
 export function encodeChain(msg: Chain): Uint8Array {
   return rt.encodeMessage(Chain$desc, msg);
+}
+
+export function patchChain(base: Uint8Array, patch: Uint8Array, paths: readonly string[]): Uint8Array {
+  return rt.applyMaskedPatch(Chain$desc, base, patch, paths);
 }
 
 export function decodeChain(buf: Uint8Array): Chain {

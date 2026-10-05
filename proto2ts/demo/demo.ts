@@ -15,6 +15,7 @@ import {
   encodeAddressBook,
   encodeChain,
   encodePerson,
+  patchPerson,
 } from "./addressbook.pb.js";
 import type { AddressBook, Chain, Person } from "./addressbook.pb.js";
 
@@ -406,6 +407,97 @@ section("7. Malformed input fails explicitly");
     );
     console.log(`    depth 9 decode: ${(e as Error).message}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+section("8. Masked patch: whitelist replace/clear on wire bytes");
+{
+  // Base: a complete Person on the wire, plus one unknown field (no. 30).
+  const baseBody = encodePerson({
+    name: "J",
+    id: 5,
+    email: "j@example.com",
+    address: { street: "7 Elm St", city: "Capital City", zip: "11111" },
+    deltas: [],
+    lucky_numbers: [1, 2, 3],
+    active: true,
+  });
+  const tail = new rt.Writer();
+  tail.tag(30, 0);
+  tail.varint(150n);
+  const base = new Uint8Array([...baseBody, ...tail.finish()]);
+
+  // Patch: partial Person — explicit active=false, new lucky_numbers, and a
+  // new address.zip (no street/city: a patch may omit required fields).
+  const pw = new rt.Writer();
+  pw.tag(7, 0);
+  pw.varint(0n); // active = false, explicit
+  pw.tag(6, 0);
+  pw.varint(9n); // lucky_numbers = [9]
+  const addr = new rt.Writer();
+  const zip = new TextEncoder().encode("99999");
+  addr.tag(3, 2);
+  addr.varint(BigInt(zip.length));
+  addr.bytes(zip);
+  const addrBytes = addr.finish();
+  pw.tag(4, 2);
+  pw.varint(BigInt(addrBytes.length));
+  pw.bytes(addrBytes);
+  const patch = pw.finish();
+
+  const out = patchPerson(base, patch, [
+    "active",
+    "lucky_numbers",
+    "address.zip",
+    "email", // selected but absent from the patch -> cleared
+  ]);
+  const merged = decodePerson(out);
+  console.log(
+    `    merged: active=${String(merged.active)}, lucky=${JSON.stringify(merged.lucky_numbers)}, zip=${merged.address?.zip}, email=${String(merged.email)}`,
+  );
+  check(merged.active === false, "explicit false replaces true");
+  check("active" in merged, "explicit default keeps presence");
+  check(
+    JSON.stringify(merged.lucky_numbers) === JSON.stringify([9]),
+    "repeated field is replaced, not appended",
+  );
+  check(merged.address?.zip === "99999", "sub-path updates only address.zip");
+  check(
+    merged.address?.street === "7 Elm St" && merged.address?.city === "Capital City",
+    "unselected siblings of address.zip are kept",
+  );
+  check(merged.email === undefined, "selected-but-absent singular is cleared");
+  check(merged.id === 5 && merged.name === "J", "unselected fields are kept");
+  check(
+    rt.getUnknownFields(merged).map((u) => u.no).join(",") === "30",
+    "unknown wire data of the untouched root is preserved",
+  );
+
+  // Invalid selections fail the whole operation.
+  for (const [label, paths] of [
+    ["overlap", ["address", "address.zip"]],
+    ["duplicate", ["email", "email"]],
+    ["through repeated", ["deltas.x"]],
+    ["unknown field", ["nosuch"]],
+  ] as const) {
+    let threw = false;
+    try {
+      patchPerson(base, patch, paths);
+    } catch (e) {
+      threw = e instanceof rt.PatchError;
+    }
+    check(threw, `invalid selection rejected: ${label}`);
+  }
+  // A candidate that loses a required field fails as a whole.
+  let requiredFailed = false;
+  try {
+    patchPerson(base, patch, ["name"]);
+  } catch (e) {
+    requiredFailed =
+      e instanceof rt.DecodeError && /Person\.name/.test((e as Error).message);
+  }
+  check(requiredFailed, "clearing a required field fails the whole patch");
+  console.log("    invalid selections and incomplete candidates are rejected");
 }
 
 // ---------------------------------------------------------------------------

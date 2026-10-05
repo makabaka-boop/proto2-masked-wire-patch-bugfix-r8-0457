@@ -37,8 +37,8 @@ npx tsx src/cli.ts my.proto -o my.pb.ts --runtime ../src/runtime/runtime.js
 ```
 
 The generated module exports, per message `M`: an interface `M`, a descriptor
-`M$desc`, and `encodeM(msg): Uint8Array` / `decodeM(buf): M` built on the
-shared runtime.
+`M$desc`, and `encodeM(msg): Uint8Array` / `decodeM(buf): M` /
+`patchM(base, patch, paths): Uint8Array` built on the shared runtime.
 
 ## Supported schema subset
 
@@ -102,6 +102,23 @@ types, misplaced `packed`, and syntax errors.
   truncated fixed32/fixed64, field number 0, illegal field numbers. Encoding
   enforces the same depth limit and validates ranges/required fields with
   `rt.EncodeError`.
+- **Masked patching** (`rt.applyMaskedPatch`, exposed per message as
+  `patchM(baseWire, patchWire, paths)`): applies an *incomplete* patch
+  message to a *complete* base message along a whitelist of 1–32 field
+  paths (`rt.MAX_PATCH_PATHS`). Paths name known fields dot-separated;
+  they may not pass through repeated or scalar fields, and duplicates or
+  parent/child overlaps are rejected with `rt.PatchError`. A selected
+  repeated field is **replaced** as a whole (never appended; absent in the
+  patch means cleared); a selected singular field is replaced when the
+  patch carries it — explicit defaults keep their presence — and **cleared**
+  when the patch leaves it absent. Sub-paths (`address.zip`) touch only
+  that leaf: unselected siblings and the unknown fields of every node that
+  is not wholesale-replaced or deleted keep their original bytes and order,
+  while a replaced/deleted node takes its whole subtree (unknowns included)
+  with it. Unknown fields contained in the patch are never introduced. The
+  patch may omit required fields, but the merged candidate must satisfy
+  every required field or the whole operation fails; corrupt payloads fail
+  with `rt.DecodeError`. Failures never modify the caller's buffers.
 
 ## Testing and the role of official tooling
 
